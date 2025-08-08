@@ -1,0 +1,815 @@
+\documentclass{article}
+
+% Language and encoding
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Page layout
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{lscape}
+\usepackage{adjustbox}
+
+
+\title{Quantitative Comparison of Portfolio Weighting Strategies}
+\author{Yanis Montacer}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents a quantitative comparison of portfolio weighting strategies, generated automatically using Python scripts available at:
+\href{https://github.com/your-github-link}{https://github.com/your-github-link}
+\end{abstract}
+
+\section{Objective and Methodology}
+
+The goal of this study is to assess the impact of various portfolio weighting strategies on performance, diversification, and risk.
+
+
+Each strategy is applied on a rolling basis using historical monthly return data. The backtest employs a 12-month estimation window, simulating an out-of-sample rebalancing process.
+
+\textbf{Key assumptions:}
+\begin{itemize}
+    \item Data sourced from Yahoo Finance via the \texttt{yfinance} API.
+    \item Adjusted closing prices are used to compute monthly returns.
+    \item Returns are expressed in USD.
+    \item No transaction costs, taxes, or slippage are accounted for.
+\end{itemize}
+
+
+\section{Data and Asset Universe}
+
+Monthly returns are computed from adjusted closing prices. The data is processed to generate annualized performance statistics and time-series plots for wealth and weights.
+\begin{table}[H]
+    \centering
+    \caption{The companies in our investment universe.}
+    \label{tab:company_names}
+    \begin{adjustbox}{max width=\textwidth}
+        \input{results/ticker_names.tex}
+    \end{adjustbox}
+\end{table}
+
+\newpage
+
+\section{Covariance Matrix Estimation}
+
+The choice of covariance matrix is central to portfolio optimization. In this study, we compare and use the following estimators:
+
+\subsection{Sample Covariance Matrix}
+\label{subsec:sample}
+
+The most basic estimator is the empirical sample covariance matrix:
+\[
+\Sigma_{\text{sample}} = \frac{1}{T-1} \sum_{t=1}^{T} (r_t - \bar{r})(r_t - \bar{r})^\top
+\]
+where \( r_t \) is the return vector at time \( t \), and \( \bar{r} \) is the mean return vector. While unbiased, this estimator is often unstable, especially when the number of assets is large relative to the number of observations.
+
+\subsection{Constant Correlation Covariance Matrix (Elton-Gruber)}
+
+This estimator assumes that all pairwise correlations between assets are equal, leading to a more stable structure. Let \( \rho \) be the average pairwise correlation between assets:
+\[
+\rho = \frac{1}{n(n-1)} \sum_{i \neq j} \rho_{ij}
+\]
+
+The covariance between assets \( i \) and \( j \) is then:
+\[
+\sigma_{ij} =
+\begin{cases}
+    \sigma_i \sigma_j \rho & \text{if } i \neq j \\
+    \sigma_i^2 & \text{if } i = j
+\end{cases}
+\]
+
+This leads to a covariance matrix \( \Sigma_{\text{CC}} \) with the same variances as the sample estimator but a simplified correlation structure:
+\[
+\Sigma_{\text{CC}} = \rho \cdot (\sigma \sigma^\top) + (1 - \rho) \cdot \text{diag}(\sigma^2)
+\]
+
+This estimator reduces noise and overfitting risk in optimization, especially in high-dimensional settings.
+
+\subsection{Shrinkage Estimator}
+
+To balance flexibility and stability, we use a shrinkage estimator that is a convex combination of the sample and constant correlation matrices:
+\[
+\Sigma_{\text{shrinkage}} = \delta \cdot \Sigma_{\text{CC}} + (1 - \delta) \cdot \Sigma_{\text{sample}}
+\]
+
+where \( \delta \in [0,1] \) controls the shrinkage intensity. A value of \( \delta = 0.5 \) equally weights both estimators. Shrinkage estimators are widely recommended for portfolio construction as they improve estimation accuracy by reducing the impact of noise.
+
+\textbf{Implementation:} These estimators are implemented in Python, and used as inputs to the Minimum Variance, Maximum Sharpe, and Equal Risk Contribution portfolios.
+
+
+
+\section{Expected Returns Forecasting}
+
+Forecasting expected returns is one of the most challenging aspects of portfolio construction. Following conventional practice, we use the historical mean returns over the rolling estimation window as a proxy for expected returns.
+
+\subsection{Historical Mean Returns}
+
+Let \( r_{i,t} \) denote the return of asset \( i \) at time \( t \), and \( T \) the size of the estimation window. The expected return is estimated as:
+\[
+\mu_i = \frac{1}{T} \sum_{t=1}^T r_{i,t}
+\]
+
+This approach, while naive, is widely used in the literature due to its simplicity and the difficulty of producing more accurate forecasts (DeMiguel et al., 2009). It is particularly suited to backtesting frameworks where model risk must be minimized.
+\newpage
+
+
+\section{Statistical Metrics and Formulas}
+
+\begin{itemize}
+    \item \textbf{Annualized Return:}
+    \[
+    \text{Annualized Return} = \left( \prod_{t=1}^{T} (1 + r_t) \right)^{\frac{12}{T}} - 1
+    \]
+    where $r_t$ is the return at month $t$, and $T$ is the number of months.
+
+    \item \textbf{Annualized Volatility:}
+    \[
+    \text{Annualized Volatility} = \sqrt{12} \times \text{Std}(r_t)
+    \]
+    where $\text{Std}(r_t)$ is the standard deviation of monthly returns.
+
+    \item \textbf{Skewness:}  
+    The degree of asymmetry of the return distribution.  
+    For a sample of $n$ returns $r_1, ..., r_n$:
+    \[
+    \text{Skewness} = \frac{1}{n} \sum_{i=1}^{n} \left( \frac{r_i - \bar{r}}{\sigma} \right)^3
+    \]
+    where $\bar{r}$ is the mean and $\sigma$ is the standard deviation.
+
+    \item \textbf{Kurtosis:}  
+    The "tailedness" of the return distribution.  
+    \[
+    \text{Kurtosis} = \frac{1}{n} \sum_{i=1}^{n} \left( \frac{r_i - \bar{r}}{\sigma} \right)^4
+    \]
+    \item \textbf{Cornish-Fisher VaR (5\%):}\\
+    The Value-at-Risk at 5\% using the Cornish-Fisher expansion adjusts the normal quantile for skewness and kurtosis in the return distribution.\\
+    
+    Let $z_{0.05}$ be the 5\% quantile of the standard normal distribution ($z_{0.05} \approx -1.645$), $S$ the sample skewness, and $K$ the sample excess kurtosis. The adjusted quantile is:
+    \[
+    z^*_{0.05} = z_{0.05} + \frac{1}{6}(z_{0.05}^2 - 1)S + \frac{1}{24}(z_{0.05}^3 - 3z_{0.05})K - \frac{1}{36}(2z_{0.05}^3 - 5z_{0.05})S^2
+    \]
+    The Cornish-Fisher VaR at 5\% is then:
+    \[
+    \text{VaR}_{0.05} = \mu + \sigma \cdot z^*_{0.05}
+    \]
+    where $\mu$ is the mean and $\sigma$ the standard deviation of returns.
+    
+    \item \textbf{Historic CVaR (5\%):}\\
+    The Conditional Value-at-Risk (also called Expected Shortfall) at 5\% is the average loss in the worst 5\% of return outcomes.\\
+    
+    Given a return series $r_1, \dots, r_T$, the historic CVaR at 5\% is:
+    \[
+    \text{CVaR}_{0.05} = \frac{1}{\lfloor 0.05 T \rfloor} \sum_{i \in \mathcal{I}} r_i
+    \]
+    where $\mathcal{I}$ is the set of indices corresponding to the lowest 5\% of returns (i.e., the worst losses).
+
+    \item \textbf{Sharpe Ratio:}
+    \[
+    \text{Sharpe Ratio} = \frac{\text{Annualized Return} - r_f}{\text{Annualized Volatility}}
+    \]
+    where $r_f$ is the risk-free rate (here assumed to be zero unless otherwise stated).
+
+    \item \textbf{Max Drawdown:}  
+    The largest observed peak-to-trough decline in wealth, over the sample period:
+    \[
+    \text{Max Drawdown} = \min_t \left( \frac{W_t - \max_{s \leq t} W_s}{\max_{s \leq t} W_s} \right)
+    \]
+    where $W_t$ is the cumulative wealth at time $t$.
+
+    \item \textbf{Risk Contribution:}  
+    \label{item:risk_contribution}
+    The contribution of asset $i$ to the total portfolio risk is:
+    \[
+    RC_i = \frac{w_i \cdot (\Sigma w)_i}{\sqrt{w^\top \Sigma w}}
+    \]
+    where $w$ is the vector of portfolio weights and $\Sigma$ is the covariance matrix of returns.  
+    This measures the share of total portfolio volatility that is attributable to each asset.
+\end{itemize}
+
+
+
+\newpage
+
+
+
+\section{Portfolio Construction Methods}
+
+\subsection{Equally Weighted Portfolio (EW)}
+
+
+
+The equally weighted (EW) portfolio assigns the same weight to each asset in the portfolio, regardless of its volatility, market capitalization, or expected return. Formally, with \( N \) assets, the weight of asset \( i \) is:
+
+\[
+w_i = \frac{1}{N}, \quad \text{for } i = 1, 2, ..., N
+\]
+
+
+
+\subsection{Inverse Volatility Portfolio (IV)}
+
+The inverse volatility (IV) portfolio assigns weights to each asset inversely proportional to their historical volatility, giving greater importance to more stable assets. With \( N \) assets, and \(\sigma_i\) the standard deviation of asset \(i\) over the estimation window, the weight of asset \( i \) is:
+
+\[
+w_i = \frac{\frac{1}{\sigma_i}}{\sum_{j=1}^{N} \frac{1}{\sigma_j}}, \quad \text{for } i = 1, 2, ..., N
+\]
+
+This ensures the portfolio is diversified by risk, allocating less capital to the most volatile assets and more to those with lower risk.
+
+
+\newpage
+
+\subsection{Equal Risk Contribution (ERC) Portfolio}
+
+The equal risk contribution (ERC) portfolio---also called \textit{risk parity}---is designed so that each asset contributes equally to the total portfolio risk. 
+Unlike the equally weighted portfolio, the ERC approach explicitly accounts for both the volatility and the correlation structure of assets through the covariance matrix~$\Sigma$.
+
+Given a portfolio with $N$ assets and weights $w$, the ERC portfolio solves:
+\[
+\min_{w} \sum_{i=1}^N \left( RC_i - \frac{1}{N} \right)^2 
+\quad \text{subject to } \sum_{i=1}^N w_i = 1, \; w_i \geq 0 \ \forall i
+\]
+
+where $RC_i$ is the risk contribution of asset $i$ .
+
+The choice of covariance matrix~$\Sigma$ is crucial in determining the resulting allocations, since it reflects both individual volatilities and correlations between assets.
+
+In this report, we illustrate ERC portfolios computed with three different covariance estimators: the sample covariance, the Elton-Gruber constant correlation model, and the Ledoit-Wolf shrinkage estimator.
+
+
+
+
+\begin{table}[htbp]
+\centering
+\caption{Summary Statistics for Equal Risk Contribution Portfolios}
+\label{tab:stats_erc}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_erc.tex}
+\end{adjustbox}
+\end{table}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_erc.pdf}
+    \caption{Wealth Evolution of Equal Risk Contribution Portfolios}
+    \label{fig:wealth_erc}
+\end{figure}
+
+\newpage
+\subsection{Maximum Sharpe Ratio (MSR) Portfolio}
+
+The Maximum Sharpe Ratio (MSR) portfolio aims to find the asset weights that maximize the portfolio's risk-adjusted return, as measured by the Sharpe ratio. This approach explicitly uses forecasts of expected returns and the covariance structure of asset returns.
+
+Given $N$ assets, a vector of expected excess returns $\mu$, and a covariance matrix $\Sigma$, the MSR portfolio solves the following optimization problem:
+\[
+\max_{w} \frac{w^\top \mu}{\sqrt{w^\top \Sigma w}}
+\quad \text{subject to } \sum_{i=1}^N w_i = 1, \; w_i \geq 0 \ \forall i
+\]
+
+where $w$ is the vector of portfolio weights.
+
+The solution yields the allocation that provides the highest expected return per unit of risk (volatility). In practice, we estimate $\mu$ as the vector of historical mean returns over the estimation window, and $\Sigma$ using one of the covariance estimators described in Section~\ref{subsec:sample}.
+
+The MSR portfolio is also known as the "tangency portfolio" in mean-variance theory.
+
+In this report, we compute MSR portfolios using three covariance estimators: the sample covariance, the Elton-Gruber constant correlation model, and the Ledoit-Wolf shrinkage estimator.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary Statistics for Maximum Sharpe Ratio Portfolios}
+\label{tab:stats_msr}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_msr.tex}
+\end{adjustbox}
+\end{table}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_msr.pdf}
+    \caption{Wealth Evolution of Maximum Sharpe Ratio Portfolios}
+    \label{fig:wealth_msr}
+\end{figure}
+
+\subsubsection{Maximum Sharpe Ratio (MSR) Portfolio with Weight Constraints}
+
+The Maximum Sharpe Ratio (MSR) portfolio can be computed with additional lower bound constraints on asset weights. In this implementation, we allow each weight to be no smaller than a user-specified fraction of $1/N$, where $N$ is the number of assets. For example, a minimum weight factor of 0.5 enforces $w_i \geq 1/(2N)$ for all $i$.
+
+Formally, the optimization becomes:
+\[
+\max_{w} \frac{w^\top \mu}{\sqrt{w^\top \Sigma w}}
+\quad \text{subject to } \sum_{i=1}^N w_i = 1,\; w_i \geq \text{min weight} \ \forall i
+\]
+
+where "min weight" is set to $\alpha / N$ with $\alpha \in [0,1]$.
+
+In this report, we test the MSR portfolio with and without weight constraints, using each of the three covariance estimators: sample covariance, constant correlation (Elton-Gruber), and Ledoit-Wolf shrinkage.
+
+
+
+
+\begin{table}[htbp]
+\centering
+\caption{Summary Statistics for MSR Portfolios with Lower Bound}
+\label{tab:stats_msr_lb}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_msr_lower_bound.tex}
+\end{adjustbox}
+\end{table}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_msr_lower_bound.pdf}
+    \caption{Wealth Evolution of MSR Portfolios with Lower Bound}
+    \label{fig:wealth_msr_lb}
+\end{figure}
+
+\newpage
+\noindent
+In practice, applying a lower bound on weights (e.g., \( w_i \geq \frac{1}{2N} \)) prevents the optimizer from allocating very small or zero positions to certain assets, which can help improve diversification and avoid concentration in a few assets. The table below compares the MSR portfolio performance with and without minimum weight constraints.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of MSR Portfolios With and Without Lower Bound}
+\label{tab:stats_msr_vs}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_msr_vs.tex}
+\end{adjustbox}
+\end{table}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_msr_vs.pdf}
+    \caption{Wealth Evolution: MSR vs. MSR with Lower Bound (Shrinkage Cov)}
+    \label{fig:wealth_msr_vs}
+\end{figure}
+
+
+
+\newpage
+\subsection{Minimum Variance (GMV) Portfolio}
+
+The Minimum Variance (GMV) portfolio aims to find the asset weights that minimize the total portfolio risk (volatility), without considering expected returns. This approach relies solely on the covariance structure of asset returns.
+
+Given $N$ assets and a covariance matrix $\Sigma$, the GMV portfolio solves the following optimization problem:
+\[
+\min_{w} \sqrt{w^\top \Sigma w}
+\quad \text{subject to } \sum_{i=1}^N w_i = 1, \; w_i \geq 0 \ \forall i
+\]
+where $w$ is the vector of portfolio weights.
+
+The solution yields the allocation that achieves the lowest possible risk (standard deviation) for the portfolio, regardless of the return outlook. In practice, $\Sigma$ is estimated using one of the covariance estimators described in Section~\ref{subsec:sample}.
+
+In this report, we compute GMV portfolios using three covariance estimators: the sample covariance, the Elton-Gruber constant correlation model, and the Ledoit-Wolf shrinkage estimator.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary Statistics for Minimum Variance (GMV) Portfolios}
+\label{tab:stats_gmv}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_gmv.tex}
+\end{adjustbox}
+\end{table}
+
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_gmv.pdf}
+    \caption{Wealth Evolution of Global Minimum Variance Portfolios}
+    \label{fig:wealth_gmv}
+\end{figure}
+
+\newpage
+
+\subsubsection{Minimum Variance (GMV) Portfolio with Weight Constraints}
+
+The Minimum Variance portfolio can be computed with additional lower bound constraints on asset weights. In this implementation, each weight is required to be no smaller than a user-specified fraction of $1/N$, where $N$ is the number of assets. For example, a minimum weight factor of 0.5 enforces $w_i \geq 1/(2N)$ for all $i$.
+
+Formally, the optimization becomes:
+\[
+\min_{w} \sqrt{w^\top \Sigma w}
+\quad \text{subject to } \sum_{i=1}^N w_i = 1,\; w_i \geq \text{min weight} \ \forall i
+\]
+where "min weight" is set to $\alpha / N$ with $\alpha \in [0,1]$.
+
+We test the GMV portfolio with and without weight constraints, using each of the three covariance estimators.
+
+
+\begin{table}[htbp]
+\centering
+\caption{Summary statistics: Minimum Variance (GMV) with Lower Bound}
+\label{tab:stats_gmv_lb}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_gmv_lower_bound.tex}
+\end{adjustbox}
+\end{table}
+
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_gmv_lower_bound.pdf}
+    \caption{Wealth Evolution of GMV Portfolios with Lower Bound}
+    \label{fig:wealth_gmv_lb}
+\end{figure}
+
+
+\newpage
+
+\noindent
+Applying a lower bound on weights (e.g., $w_i \geq 1/(2N)$) prevents the optimizer from assigning negligible or zero allocations to certain assets, which can improve diversification and reduce concentration risk. The table below compares GMV portfolio performance with and without minimum weight constraints.
+
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of GMV Portfolios With and Without Lower Bound}
+\label{tab:stats_gmv_vs}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_gmv_vs.tex}
+\end{adjustbox}
+\end{table}
+
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_gmv_vs.pdf}
+    \caption{Wealth Evolution: GMV vs. GMV with Lower Bound (Shrinkage Cov)}
+    \label{fig:wealth_gmv_vs}
+\end{figure}
+
+\newpage
+\section{Global Comparison of Portfolio Strategies }
+
+To provide a clear and fair comparison across all portfolio construction methods, we evaluate each strategy using the sample covariance matrix as the common risk estimator. This choice avoids the complexity of cross-comparing all combinations of portfolios and covariance estimators, and instead allows us to focus on the relative performance of each allocation method under identical risk modeling assumptions.
+
+\begin{table}[htbp]
+\centering
+\caption{Global Comparison of All Portfolio Strategies}
+\label{tab:stats_global}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/tableau_resultats_rets_global.tex}
+\end{adjustbox}
+\end{table}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/wealth_plot_rets_global.pdf}
+    \caption{Wealth Evolution of All Strategies (Sample Covariance)}
+    \label{fig:wealth_global}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{config/drawdown_plot.pdf}
+    \caption{Drawdown of All Strategies (Sample Covariance)}
+    \label{fig:drawdown_global}
+\end{figure}
+
+
+\newpage
+
+\section{Factor Exposure Analysis: Fama-French Three-Factor Regression}
+
+To better understand the sources of portfolio risk and return, we run a standard factor regression for each portfolio against the Fama-French three-factor model (Fama \& French, 1993). This analysis decomposes excess returns into exposures to the market (MKT), size (SMB), and value (HML) factors.
+
+For each portfolio, we estimate the following linear regression:
+\[
+R_{pt} - r_f = \alpha + \beta_{\mathrm{MKT}} (R_{mt} - r_f) + \beta_{\mathrm{SMB}} \cdot \mathrm{SMB}_t + \beta_{\mathrm{HML}} \cdot \mathrm{HML}_t + \epsilon_t
+\]
+where:
+\begin{itemize}
+    \item $R_{pt}$: Portfolio return at time $t$
+    \item $r_f$: Risk-free rate
+    \item $R_{mt}$: Market return at time $t$
+    \item $\mathrm{SMB}_t$, $\mathrm{HML}_t$: Size and value factor returns at time $t$
+    \item $\alpha$: Intercept (risk-adjusted excess return)
+    \item $\beta_{\mathrm{MKT}}$, $\beta_{\mathrm{SMB}}$, $\beta_{\mathrm{HML}}$: Factor loadings (sensitivities)
+    \item $R^2$: Coefficient of determination, measures fit quality
+\end{itemize}
+
+
+Monthly Fama-French factor data are retrieved from the \href{https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html}{Kenneth R. French Data Library}.
+
+
+\begin{table}[htbp]
+\centering
+\caption{Fama-French Three-Factor Regression Results}
+\label{tab:stats_capm}
+\begin{adjustbox}{max width=\textwidth}
+    \input{results/capm.tex}
+\end{adjustbox}
+\end{table}
+
+\paragraph{Interpretation:}
+\begin{itemize}
+    \item \textbf{Alpha}: The risk-adjusted excess return unexplained by exposures to the three factors.
+    \item \textbf{Beta\_Mkt}: Sensitivity to the overall market factor.
+    \item \textbf{Beta\_SMB}: Sensitivity to the size (Small Minus Big) factor.
+    \item \textbf{Beta\_HML}: Sensitivity to the value (High Minus Low) factor.
+\end{itemize}
+
+
+The table below reports the factor exposures, alpha, and $R^2$ for each portfolio, providing insight into how the different allocation strategies load on systematic risk factors.
+\clearpage
+
+
+
+\newpage
+
+\appendix
+\section{Portfolio Evolutions: Weights and Risk Contributions}
+
+\subsection{Equally Weighted}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_ew.pdf}
+    \caption{Weight Evolution: Equally Weighted}
+    \label{fig:weights_ew}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_ew.pdf}
+    \caption{Risk Contribution Evolution: Equally Weighted}
+    \label{fig:risk_contribution_ew}
+\end{figure}
+\clearpage
+
+\subsection{Inverse Volatility}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_inv_vol.pdf}
+    \caption{Weight Evolution: Inverse Volatility}
+    \label{fig:weights_inv_vol}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_inv_vol.pdf}
+    \caption{Risk Contribution Evolution: Inverse Volatility}
+    \label{fig:risk_contribution_inv_vol}
+\end{figure}
+\clearpage
+
+\subsection{ERC (Sample)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_rets_erc.pdf}
+    \caption{Weight Evolution: ERC (Sample)}
+    \label{fig:weights_erc_sample}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_erc.pdf}
+    \caption{Risk Contribution Evolution: ERC (Sample)}
+    \label{fig:risk_contribution_erc_sample}
+\end{figure}
+\clearpage
+
+\subsection{ERC (Constant Correlation)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_erc_cc.pdf}
+    \caption{Weight Evolution: ERC (Constant Correlation)}
+    \label{fig:weights_erc_cc}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_erc_cc.pdf}
+    \caption{Risk Contribution Evolution: ERC (Constant Correlation)}
+    \label{fig:risk_contribution_erc_cc}
+\end{figure}
+\clearpage
+
+\subsection{ERC (Shrinkage)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_erc_shrinkage.pdf}
+    \caption{Weight Evolution: ERC (Shrinkage)}
+    \label{fig:weights_erc_shrinkage}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_erc_shrinkage.pdf}
+    \caption{Risk Contribution Evolution: ERC (Shrinkage)}
+    \label{fig:risk_contribution_erc_shrinkage}
+\end{figure}
+\clearpage
+
+\subsection{GMV (Sample)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_rets_gmv.pdf}
+    \caption{Weight Evolution: GMV (Sample)}
+    \label{fig:weights_gmv_sample}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv.pdf}
+    \caption{Risk Contribution Evolution: GMV (Sample)}
+    \label{fig:risk_contribution_gmv_sample}
+\end{figure}
+\clearpage
+
+\subsection{GMV (Constant Correlation)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_gmv_cc.pdf}
+    \caption{Weight Evolution: GMV (Constant Correlation)}
+    \label{fig:weights_gmv_cc}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv_cc.pdf}
+    \caption{Risk Contribution Evolution: GMV (Constant Correlation)}
+    \label{fig:risk_contribution_gmv_cc}
+\end{figure}
+\clearpage
+
+\subsection{GMV (Shrinkage)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_gmv_shrinkage.pdf}
+    \caption{Weight Evolution: GMV (Shrinkage)}
+    \label{fig:weights_gmv_shrinkage}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv_shrinkage.pdf}
+    \caption{Risk Contribution Evolution: GMV (Shrinkage)}
+    \label{fig:risk_contribution_gmv_shrinkage}
+\end{figure}
+\clearpage
+
+\subsection{GMV (Sample, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_gmv_lb.pdf}
+    \caption{Weight Evolution: GMV (Sample, Lower Bound)}
+    \label{fig:weights_gmv_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv_lb.pdf}
+    \caption{Risk Contribution Evolution: GMV (Sample, Lower Bound)}
+    \label{fig:risk_contribution_gmv_lb}
+\end{figure}
+\clearpage
+
+\subsection{GMV (CC, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_gmv_cc_lb.pdf}
+    \caption{Weight Evolution: GMV (CC, Lower Bound)}
+    \label{fig:weights_gmv_cc_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv_cc_lb.pdf}
+    \caption{Risk Contribution Evolution: GMV (CC, Lower Bound)}
+    \label{fig:risk_contribution_gmv_cc_lb}
+\end{figure}
+\clearpage
+
+\subsection{GMV (Shrinkage, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_gmv_shrinkage_lb.pdf}
+    \caption{Weight Evolution: GMV (Shrinkage, Lower Bound)}
+    \label{fig:weights_gmv_shrinkage_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_gmv_shrinkage_lb.pdf}
+    \caption{Risk Contribution Evolution: GMV (Shrinkage, Lower Bound)}
+    \label{fig:risk_contribution_gmv_shrinkage_lb}
+\end{figure}
+\clearpage
+
+\subsection{MSR (Sample)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_rets_msr.pdf}
+    \caption{Weight Evolution: MSR (Sample)}
+    \label{fig:weights_msr_sample}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr.pdf}
+    \caption{Risk Contribution Evolution: MSR (Sample)}
+    \label{fig:risk_contribution_msr_sample}
+\end{figure}
+\clearpage
+
+\subsection{MSR (Constant Correlation)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_msr_cc.pdf}
+    \caption{Weight Evolution: MSR (Constant Correlation)}
+    \label{fig:weights_msr_cc}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr_cc.pdf}
+    \caption{Risk Contribution Evolution: MSR (Constant Correlation)}
+    \label{fig:risk_contribution_msr_cc}
+\end{figure}
+\clearpage
+
+\subsection{MSR (Shrinkage)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_msr_shrinkage.pdf}
+    \caption{Weight Evolution: MSR (Shrinkage)}
+    \label{fig:weights_msr_shrinkage}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr_shrinkage.pdf}
+    \caption{Risk Contribution Evolution: MSR (Shrinkage)}
+    \label{fig:risk_contribution_msr_shrinkage}
+\end{figure}
+\clearpage
+
+\subsection{MSR (Sample, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_msr_lb.pdf}
+    \caption{Weight Evolution: MSR (Sample, Lower Bound)}
+    \label{fig:weights_msr_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr_lb.pdf}
+    \caption{Risk Contribution Evolution: MSR (Sample, Lower Bound)}
+    \label{fig:risk_contribution_msr_lb}
+\end{figure}
+\clearpage
+
+\subsection{MSR (CC, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_msr_cc_lb.pdf}
+    \caption{Weight Evolution: MSR (CC, Lower Bound)}
+    \label{fig:weights_msr_cc_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr_cc_lb.pdf}
+    \caption{Risk Contribution Evolution: MSR (CC, Lower Bound)}
+    \label{fig:risk_contribution_msr_cc_lb}
+\end{figure}
+\clearpage
+
+\subsection{MSR (Shrinkage, Lower Bound)}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/weights_plot_msr_shrinkage_lb.pdf}
+    \caption{Weight Evolution: MSR (Shrinkage, Lower Bound)}
+    \label{fig:weights_msr_shrinkage_lb}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{config/risk_contribution_plot_msr_shrinkage_lb.pdf}
+    \caption{Risk Contribution Evolution: MSR (Shrinkage, Lower Bound)}
+    \label{fig:risk_contribution_msr_shrinkage_lb}
+\end{figure}
+\clearpage
+
+
+\section*{References}
+
+\begin{itemize}
+    \item Fama, E. F., \& French, K. R. (1993). Common risk factors in the returns on stocks and bonds. \textit{Journal of Financial Economics, 33}(1), 3-56.
+    \item Kenneth R. French Data Library: \\ \url{https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html}
+    \item Elton, E. J., \& Gruber, M. J. (1973). Estimating the dependence structure of share prices—Implications for portfolio selection. \textit{The Journal of Finance, 28}(5), 1203-1232.
+    \item Ledoit, O., \& Wolf, M. (2004). A well-conditioned estimator for large-dimensional covariance matrices. \textit{Journal of Multivariate Analysis, 88}(2), 365-411.
+    \item DeMiguel, V., Garlappi, L., \& Uppal, R. (2009). Optimal versus naive diversification: How inefficient is the 1/N portfolio strategy? \textit{Review of Financial Studies, 22}(5), 1915-1953.
+    \item {EDHEC Risk Institute.} \textit{Advanced Portfolio Management and Analysis} [MOOC]. Coursera. \\ \url{https:www.coursera.org/learn/introduction-portfolio-construction-python}
+    \item Python packages: pandas, numpy, scipy, matplotlib, yfinance.
+\end{itemize}
+
+\noindent
+\textit{Note: The methodology and much of the code and intuition behind this project are directly inspired by the ``Advanced Portfolio Management and Analysis'' MOOC from EDHEC Business School.}
+
+
+
+\end{document}
