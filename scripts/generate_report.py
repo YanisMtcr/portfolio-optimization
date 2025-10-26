@@ -1,10 +1,17 @@
 import pandas as pd
 import os
+import sys
 from pathlib import Path
-from portfolio_opt.portfolio import Portfolio
-from portfolio_opt.data_loader import TickerData
 import subprocess
 import yfinance as yf
+
+
+# Add the project root to Python path so we can import portfolio_opt
+project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(project_root))
+
+from portfolio_opt.portfolio import Portfolio
+from portfolio_opt.data_loader import TickerData
 
 
 def save_df_to_latex(df: pd.DataFrame, filename: str, transpose=False, **kwargs):
@@ -33,6 +40,9 @@ def get_company_names_and_create_tex(tickers, output_dir="results"):
     Fetches company names, industry, and asset type for a list of tickers 
     and creates a LaTeX table.
     """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
     asset_data = []
     print("Fetching asset data for the report...")
     for ticker_str in tickers:
@@ -113,16 +123,15 @@ def generator_file(portfolio_instance, output_dir="results"):
 
 
 def main(tickers):
-    # Ensure we run from the project root so relative paths work
+    
     project_root = Path(__file__).resolve().parents[1]
     os.chdir(project_root)
-
     get_company_names_and_create_tex(tickers, "results")
     data = TickerData(tickers=tickers, start_date="2000-05-01")
     Portfolio_1 = Portfolio(data.returns_series, estimation_window=12, start_date=data.start_date, end_date=data.end_date)
     generator_file(Portfolio_1, output_dir="results")
 
-    # Try to compile LaTeX in a portable way
+
     pdflatex_cmd = "pdflatex"
     try:
         subprocess.run([pdflatex_cmd, "main.tex"], check=True)

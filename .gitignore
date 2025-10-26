@@ -35,6 +35,7 @@ dist/
 # Results and generated figures/tables
 config/
 results/
+main.pdf
 
 # IDE/editor
 .vscode/
